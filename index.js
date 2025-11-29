@@ -1,5 +1,5 @@
 const express = require("express");
-const fetch = require("node-fetch"); // npm install node-fetch
+const fetch = require("node-fetch"); // npm install node-fetch@2
 const app = express();
 
 app.use(express.json());
@@ -30,7 +30,6 @@ app.get("/callback", async (req, res) => {
     return res.status(400).send("인증 코드가 전달되지 않았습니다.");
   }
 
-  // 환경변수: MALL_ID, CAFE24_CLIENT_ID, CAFE24_CLIENT_SECRET 설정 필요
   const mallId = process.env.MALL_ID;
   const clientId = process.env.CAFE24_CLIENT_ID;
   const clientSecret = process.env.CAFE24_CLIENT_SECRET;
@@ -43,7 +42,8 @@ app.get("/callback", async (req, res) => {
   }
 
   try {
-    const tokenRes = await fetch(`https://${mallId}.cafe24api.com/api/token`, {
+    // ✅ 엔드포인트 수정: /api/v2/oauth/token
+    const tokenRes = await fetch(`https://${mallId}.cafe24api.com/api/v2/oauth/token`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -63,7 +63,6 @@ app.get("/callback", async (req, res) => {
         .send(`토큰 교환 실패: ${JSON.stringify(tokenData)}`);
     }
 
-    // 성공: 코드와 토큰 보여주기 (실서비스에선 저장/암호화 권장)
     res.send(
       `인증 코드: ${code}<br>` +
       `Access Token: ${tokenData.access_token}<br>` +
@@ -84,7 +83,7 @@ app.post("/shipping-fee", (req, res) => {
 // Vercel 서버리스용 내보내기
 module.exports = app;
 
-// 로컬 실행용 (Vercel 환경에선 PORT 자동 관리)
+// 로컬 실행용
 if (require.main === module) {
   const port = process.env.PORT || 3000;
   app.listen(port, () => {
