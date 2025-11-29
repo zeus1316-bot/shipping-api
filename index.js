@@ -18,7 +18,7 @@ function calcParcelFee(w) {
   return 3500 + Math.ceil((w - 13) / 12) * 3500;
 }
 
-// 루트 라우트 (앱 정상 동작 확인용)
+// 루트 라우트
 app.get("/", (req, res) => {
   res.send("카페24 배송비 커스터마이징 앱 서버 정상 동작 중!");
 });
@@ -26,9 +26,7 @@ app.get("/", (req, res) => {
 // 카페24 OAuth Redirect URI 처리 + 토큰 교환
 app.get("/callback", async (req, res) => {
   const code = req.query.code;
-  if (!code) {
-    return res.status(400).send("인증 코드가 전달되지 않았습니다.");
-  }
+  if (!code) return res.status(400).send("인증 코드가 전달되지 않았습니다.");
 
   const mallId = process.env.MALL_ID;
   const clientId = process.env.CAFE24_CLIENT_ID;
@@ -36,31 +34,38 @@ app.get("/callback", async (req, res) => {
   const redirectUri = "https://shipping-api-opal.vercel.app/callback";
 
   if (!mallId || !clientId || !clientSecret) {
-    return res
-      .status(500)
-      .send("환경변수(MALL_ID, CAFE24_CLIENT_ID, CAFE24_CLIENT_SECRET)가 없습니다.");
+    return res.status(500).send("환경변수(MALL_ID, CAFE24_CLIENT_ID, CAFE24_CLIENT_SECRET)가 없습니다.");
   }
 
   try {
-    // ✅ 엔드포인트 수정: /api/v2/oauth/token
-    const tokenRes = await fetch(`https://${mallId}.cafe24api.com/api/v2/oauth/token`, {
+    const tokenUrl = `https://${mallId}.cafe24api.com/api/v2/oauth/token`;
+    const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+
+    const body = new URLSearchParams({
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+      code
+    }).toString();
+
+    const tokenRes = await fetch(tokenUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-        code
-      }).toString()
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Basic ${basicAuth}`
+      },
+      body
     });
 
-    const tokenData = await tokenRes.json();
+    const raw = await tokenRes.text();
+    let tokenData;
+    try {
+      tokenData = JSON.parse(raw);
+    } catch {
+      tokenData = { raw };
+    }
 
     if (!tokenRes.ok) {
-      return res
-        .status(tokenRes.status)
-        .send(`토큰 교환 실패: ${JSON.stringify(tokenData)}`);
+      return res.status(tokenRes.status).send(`토큰 교환 실패: ${JSON.stringify(tokenData)}`);
     }
 
     res.send(
@@ -73,7 +78,7 @@ app.get("/callback", async (req, res) => {
   }
 });
 
-// 배송비 계산 API 엔드포인트
+// 배송비 계산 API
 app.post("/shipping-fee", (req, res) => {
   const { iceWeight = 0, parcelWeight = 0 } = req.body;
   const fee = calcIceFee(Number(iceWeight)) + calcParcelFee(Number(parcelWeight));
